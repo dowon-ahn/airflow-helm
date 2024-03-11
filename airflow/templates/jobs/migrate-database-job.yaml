@@ -7,7 +7,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: release-name-run-airflow-migrations
-  namespace: "airflow"
+  namespace: "airflow-helm-project"
   labels:
     tier: airflow
     component: run-airflow-migrations

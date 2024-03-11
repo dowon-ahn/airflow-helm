@@ -7,7 +7,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: airflow-config
-  namespace: "airflow"
+  namespace: "airflow-helm-project"
   labels:
     tier: airflow
     component: config
@@ -99,7 +99,7 @@ data:
     kind: Pod
     metadata:
       name: placeholder-name
-      namespace: "airflow"
+      namespace: "airflow-helm-project"
       labels:
         tier: airflow
         component: worker

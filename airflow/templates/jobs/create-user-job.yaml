@@ -7,7 +7,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: release-name-create-user
-  namespace: "airflow"
+  namespace: "airflow-helm-project"
   labels:
     tier: airflow
     component: create-user-job

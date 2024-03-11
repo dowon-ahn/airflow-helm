@@ -13,7 +13,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: airflow-scheduler
-  namespace: "airflow"
+  namespace: "airflow-helm-project"
   labels:
     tier: airflow
     component: scheduler

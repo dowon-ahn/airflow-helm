@@ -4,7 +4,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: airflow-postgresql-hl
-  namespace: "airflow"
+  namespace: "airflow-helm-project"
   labels:
     app.kubernetes.io/instance: airflow
     app.kubernetes.io/managed-by: Helm

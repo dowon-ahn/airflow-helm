@@ -1,0 +1,239 @@
+---
+# Source: airflow/templates/triggerer/triggerer-deployment.yaml
+################################
+## Airflow Triggerer Deployment
+#################################
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: airflow-triggerer
+  namespace: "airflow"
+  labels:
+    tier: airflow
+    component: triggerer
+    release: airflow
+    chart: "airflow-1.12.0"
+    heritage: Helm
+spec:
+  serviceName: airflow-triggerer
+  replicas: 1
+  selector:
+    matchLabels:
+      tier: airflow
+      component: triggerer
+      release: airflow
+  template:
+    metadata:
+      labels:
+        tier: airflow
+        component: triggerer
+        release: airflow
+      annotations:
+        checksum/metadata-secret: 1527346545415bf13f4c9ad69470086eb90d854f2b83594d78ec1badb5e13eb0
+        checksum/pgbouncer-config-secret: 1dae2adc757473469686d37449d076b0c82404f61413b58ae68b3c5e99527688
+        checksum/airflow-config: de3cfc47d60c658fa16a78160a15df5906eb1e7e0b33327c7a902cf355c3fc6c
+        checksum/extra-configmaps: e862ea47e13e634cf17d476323784fa27dac20015550c230953b526182f5cac8
+        checksum/extra-secrets: e9582fdd622296c976cbc10a5ba7d6702c28a24fe80795ea5b84ba443a56c827
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+    spec:
+      nodeSelector:
+        {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  component: triggerer
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+      tolerations:
+        []
+      topologySpreadConstraints:
+        []
+      terminationGracePeriodSeconds: 60
+      restartPolicy: Always
+      serviceAccountName: airflow-triggerer
+      securityContext:
+        runAsUser: 50000
+        fsGroup: 0
+      initContainers:
+        - name: wait-for-airflow-migrations
+          resources:
+            {}
+          image: apache/airflow:2.8.1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config
+              mountPath: "/opt/airflow/airflow.cfg"
+              subPath: airflow.cfg
+              readOnly: true
+            - name: config
+              mountPath: "/opt/airflow/config/airflow_local_settings.py"
+              subPath: airflow_local_settings.py
+              readOnly: true
+          args:
+            - airflow
+            - db
+            - check-migrations
+            - --migration-wait-timeout=60
+          envFrom:
+            []
+          env:
+            # Dynamically created environment variables
+            # Dynamically created secret envs
+
+            # Extra env
+            # Hard Coded Airflow Envs
+            - name: AIRFLOW__CORE__FERNET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-fernet-key
+                  key: fernet-key
+            - name: AIRFLOW_HOME
+              value: /opt/airflow
+            # For Airflow <2.3, backward compatibility; moved to [database] in 2.3
+            - name: AIRFLOW__CORE__SQL_ALCHEMY_CONN
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-metadata
+                  key: connection
+            - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-metadata
+                  key: connection
+            - name: AIRFLOW_CONN_AIRFLOW_DB
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-metadata
+                  key: connection
+            - name: AIRFLOW__WEBSERVER__SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-webserver-secret-key
+                  key: webserver-secret-key
+      containers:
+        - name: triggerer
+          image: apache/airflow:2.8.1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          args:
+            - bash
+            - -c
+            - exec airflow triggerer
+          resources:
+            {}
+          volumeMounts:
+            #dag
+            - name: nfs-dags-volume
+              mountPath: /opt/airflow/dags/
+              readOnly: false
+            #logs
+            - name: nfs-logs-volume
+              mountPath: /opt/airflow/logs/
+              readOnly: false
+            - name: config
+              mountPath: "/opt/airflow/airflow.cfg"
+              subPath: airflow.cfg
+              readOnly: true
+            - name: config
+              mountPath: "/opt/airflow/config/airflow_local_settings.py"
+              subPath: airflow_local_settings.py
+              readOnly: true
+          envFrom:
+            []
+          env:
+            # Dynamically created environment variables
+            # Dynamically created secret envs
+
+            # Extra env
+            # Hard Coded Airflow Envs
+            - name: AIRFLOW__CORE__FERNET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-fernet-key
+                  key: fernet-key
+            - name: AIRFLOW_HOME
+              value: /opt/airflow
+            # For Airflow <2.3, backward compatibility; moved to [database] in 2.3
+            - name: AIRFLOW__CORE__SQL_ALCHEMY_CONN
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-metadata
+                  key: connection
+            - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-metadata
+                  key: connection
+            - name: AIRFLOW_CONN_AIRFLOW_DB
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-metadata
+                  key: connection
+            - name: AIRFLOW__WEBSERVER__SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-webserver-secret-key
+                  key: webserver-secret-key
+
+          livenessProbe:
+            initialDelaySeconds: 10
+            timeoutSeconds: 20
+            failureThreshold: 5
+            periodSeconds: 60
+            exec:
+              command:
+                - sh
+                - -c
+                - |
+                  CONNECTION_CHECK_MAX_COUNT=0 AIRFLOW__LOGGING__LOGGING_LEVEL=ERROR exec /entrypoint \
+                  airflow jobs check --job-type TriggererJob --local
+          ports:
+            - name: triggerer-logs
+              containerPort: 8794
+        - name: triggerer-log-groomer
+          resources:
+            {}
+          image: apache/airflow:2.8.1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          args:
+            - bash
+            - /clean-logs
+          env:
+            - name: AIRFLOW__LOG_RETENTION_DAYS
+              value: "15"
+          volumeMounts:
+            #logs
+            - name: nfs-logs-volume
+              mountPath: /opt/airflow/logs/
+              readOnly: false
+      volumes:
+        - name: config
+          configMap:
+            name: airflow-config
+        #dag
+        - name: nfs-dags-volume
+          nfs:
+            server: 192.168.190.135   # NFS 서버의 IP 주소
+            path: /home/nfs/dags/ # NFS 공유 디렉토리의 경로
+        #logs
+        - name: nfs-logs-volume
+          nfs:
+            server: 192.168.190.135   # NFS 서버의 IP 주소
+            path: /home/nfs/logs # NFS 공유 디렉토리의 경로
